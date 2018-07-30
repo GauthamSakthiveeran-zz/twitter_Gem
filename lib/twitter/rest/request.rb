@@ -7,6 +7,8 @@ require 'twitter/error'
 require 'twitter/headers'
 require 'twitter/rate_limit'
 require 'twitter/utils'
+require 'httpclient'
+require 'net/http'
 
 module Twitter
   module REST
@@ -14,7 +16,7 @@ module Twitter
       include Twitter::Utils
       BASE_URL = 'https://api.twitter.com'.freeze
       attr_accessor :client, :headers, :options, :path, :rate_limit,
-                    :request_method, :uri
+        :request_method, :uri
       alias verb request_method
 
       # @param client [Twitter::Client]
@@ -31,28 +33,36 @@ module Twitter
         @options_key = {get: :params, json_post: :json, delete: :params}[request_method] || :form
       end
 
+      def get_oauth_headers
+        @headers
+      end
+
       # @return [Array, Hash]
       def perform
+
         response = http_client.headers(@headers).public_send(@request_method, @uri.to_s, @options_key => @options)
         response_body = response.body.empty? ? '' : symbolize_keys!(response.parse)
         response_headers = response.headers
         fail_or_return_response_body(response.code, response_body, response_headers)
+
       end
 
-    private
+      private
 
       def merge_multipart_file!(options)
         key = options.delete(:key)
         file = options.delete(:file)
 
+
         options[key] = if file.is_a?(StringIO)
-                         HTTP::FormData::File.new(file, content_type: 'video/mp4')
-                       else
-                         HTTP::FormData::File.new(file, filename: File.basename(file), content_type: content_type(File.basename(file)))
-                       end
+          HTTP::FormData::File.new(file, content_type: 'video/mp4')
+        else
+          HTTP::FormData::File.new(file, filename: File.basename(file), content_type: content_type(File.basename(file)))
+        end
       end
 
       def set_multipart_options!(request_method, options)
+
         if %i[multipart_post json_post].include?(request_method)
           merge_multipart_file!(options) if request_method == :multipart_post
           @request_method = :post
@@ -115,10 +125,25 @@ module Twitter
         object
       end
 
-      # @return [HTTP::Client, HTTP]
+      def get_oauth_value(oauth_values,oauth_name)
+
+        result = nil
+        oauth_values.each do |x|
+          if x.include?(oauth_name)
+            result = x
+            break
+          end
+        end
+        result.split("\"")[1]
+
+      end
+
       def http_client
         client = @client.proxy ? HTTP.via(*proxy) : HTTP
         client = client.timeout(:per_operation, connect: @client.timeouts[:connect], read: @client.timeouts[:read], write: @client.timeouts[:write]) if @client.timeouts
+
+        client = Net::HTTP
+
         client
       end
 

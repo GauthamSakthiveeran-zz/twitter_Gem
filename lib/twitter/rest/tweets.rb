@@ -6,6 +6,7 @@ require 'twitter/rest/upload_utils'
 require 'twitter/rest/utils'
 require 'twitter/tweet'
 require 'twitter/utils'
+require 'httpclient'
 
 module Twitter
   module REST
@@ -14,6 +15,27 @@ module Twitter
       include Twitter::REST::Utils
       include Twitter::Utils
       MAX_TWEETS_PER_REQUEST = 100
+
+      def post_a_tweet(options)
+        @headers_second_request = Twitter::Headers.new(self, :post,"https://api.twitter.com/1.1/statuses/update.json",options).request_headers
+        response = (HTTPClient.new).post_content("https://api.twitter.com/1.1/statuses/update.json", options, @headers_second_request)
+        JSON.parse(response)
+      end
+
+      def get_tweet_info(tweet_id,options={})
+        @headers_for_get_request = Twitter::Headers.new(self, :get, "https://api.twitter.com/1.1/statuses/show.json?id=#{tweet_id}", options).request_headers
+        response =(HTTPClient.new).request('GET', "https://api.twitter.com/1.1/statuses/show.json?id=#{tweet_id}", {}, {}, @headers_for_get_request)
+        JSON.parse(response.body)
+      end
+
+      def get_recent_home_timeline(count,options={})
+        @headers_for_get_request = Twitter::Headers.new(self, :get, "https://api.twitter.com/1.1/statuses/home_timeline.json?count=#{count}", options).request_headers
+        response =(HTTPClient.new).request('GET', "https://api.twitter.com/1.1/statuses/home_timeline.json?count=#{count}", {}, {}, @headers_for_get_request)
+        JSON.parse(response.body)
+      end
+
+
+
 
       # Returns up to 100 of the first retweets of a given tweet
       #
@@ -125,6 +147,7 @@ module Twitter
       # @option options [String] :display_coordinates Whether or not to put a pin on the exact coordinates a tweet has been sent from.
       # @option options [Boolean, String, Integer] :trim_user Each tweet returned in a timeline will include a user object with only the author's numerical ID when set to true, 't' or 1.
       def update(status, options = {})
+        puts "HERE"
         update!(status, options)
       rescue Twitter::Error::DuplicateStatus
         user_timeline(count: 1).first
@@ -151,6 +174,7 @@ module Twitter
       # @option options [String] :display_coordinates Whether or not to put a pin on the exact coordinates a tweet has been sent from.
       # @option options [Boolean, String, Integer] :trim_user Each tweet returned in a timeline will include a user object with only the author's numerical ID when set to true, 't' or 1.
       def update!(status, options = {})
+
         hash = options.dup
         hash[:in_reply_to_status_id] = hash.delete(:in_reply_to_status).id unless hash[:in_reply_to_status].nil?
         hash[:place_id] = hash.delete(:place).woeid unless hash[:place].nil?
@@ -224,10 +248,12 @@ module Twitter
       # @option options [String] :display_coordinates Whether or not to put a pin on the exact coordinates a tweet has been sent from.
       # @option options [Boolean, String, Integer] :trim_user Each tweet returned in a timeline will include a user object with only the author's numerical ID when set to true, 't' or 1.
       def update_with_media(status, media, options = {})
-        options = options.dup
-        media_ids = pmap(array_wrap(media)) do |medium|
-          upload(medium)[:media_id]
-        end
+
+        # options = options.dup
+        # media_ids = pmap(array_wrap(media)) do |medium|
+        #   upload(medium)[:media_id]
+        # end
+        media_ids=media
         update!(status, options.merge(media_ids: media_ids.join(',')))
       end
 
@@ -323,7 +349,7 @@ module Twitter
         end.compact
       end
 
-    private
+      private
 
       def array_wrap(object)
         if object.respond_to?(:to_ary)

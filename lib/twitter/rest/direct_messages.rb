@@ -5,6 +5,7 @@ require 'twitter/rest/upload_utils'
 require 'twitter/rest/utils'
 require 'twitter/user'
 require 'twitter/utils'
+require 'twitter/error'
 
 module Twitter
   module REST
@@ -207,15 +208,138 @@ module Twitter
       # @param text [String] The text of your direct message, up to 10,000 characters.
       # @param media [File] A media file (PNG, JPEG, GIF or MP4).
       # @param options [Hash] A customizable set of options.
-      def create_direct_message_event_with_media(user, text, media, options = {})
-        media_id = upload(media, media_category_prefix: 'dm')[:media_id]
-        options = options.dup
-        options[:event] = {type: 'message_create', message_create: {target: {recipient_id: extract_id(user)}, message_data: {text: text, attachment: {type: 'media', media: {id: media_id}}}}}
-        response = Twitter::REST::Request.new(self, :json_post, '/1.1/direct_messages/events/new.json', options).perform
-        Twitter::DirectMessageEvent.new(response[:event])
+
+      def upload_image_curl(media)
+        @upload_header = Twitter::REST::Request.new(self, :multipart_post, 'https://upload.twitter.com/1.1/media/upload.json', key: :media, file: File.open(media)).get_oauth_headers
+        auth_header = @upload_header[:authorization]
+        auth_header = '{' + auth_header + '}'
+        auth_header = auth_header.gsub("OAuth","")
+        oauth_json_headers = JSON.parse(auth_header.gsub(/([a-z_]+)=/, '"\1":'))
+
+        oauth_consumer_key = oauth_json_headers["oauth_consumer_key"]
+        oauth_nonce = oauth_json_headers["oauth_nonce"]
+        oauth_signature = oauth_json_headers["oauth_signature"]
+        oauth_signature_method = oauth_json_headers["oauth_signature_method"]
+        oauth_timestamp = oauth_json_headers["oauth_timestamp"]
+        oauth_token = oauth_json_headers["oauth_token"]
+        oauth_version = oauth_json_headers["oauth_version"]
+
+        uri = "https://upload.twitter.com/1.1/media/upload.json"
+        command = "curl -X POST #{uri} -H 'authorization: OAuth oauth_consumer_key=\"#{oauth_consumer_key}\",oauth_token=\"#{oauth_token}\",oauth_signature_method=\"HMAC-SHA1\",oauth_timestamp=\"#{oauth_timestamp}\",oauth_nonce=\"#{oauth_nonce}\",oauth_version=\"1.0\",oauth_signature=\"#{oauth_signature}\"' -H 'content-type: multipart/form-data; boundary=——WebKitFormBoundary7MA4YWxkTrZu0gW' -F media=@#{media}"
+        response = %x[#{command}]
+        media_id = response.split("media_id")[1].gsub("\"","").gsub(":","").gsub(",","").to_i
+        media_id
       end
 
-    private
+      def create_direct_message_with_media(user, text, media, options = {})
+
+
+        media_id = upload_image_curl(media)
+
+
+        @headers_second_request = Twitter::Headers.new(self, :post,"https://api.twitter.com/1.1/direct_messages/events/new.json").request_headers
+
+        auth_header2 = @headers_second_request[:authorization]
+        auth_header2 = '{' + auth_header2 + '}'
+        auth_header2 = auth_header2.gsub("OAuth","")
+        oauth_json_headers2 = JSON.parse(auth_header2.gsub(/([a-z_]+)=/, '"\1":'))
+
+        oauth_consumer_key2 = oauth_json_headers2["oauth_consumer_key"]
+        oauth_nonce2= oauth_json_headers2["oauth_nonce"]
+        oauth_signature2 = oauth_json_headers2["oauth_signature"]
+        oauth_signature_method2 = oauth_json_headers2["oauth_signature_method"]
+        oauth_timestamp2 = oauth_json_headers2["oauth_timestamp"]
+        oauth_token2 = oauth_json_headers2["oauth_token"]
+        oauth_version2 = oauth_json_headers2["oauth_version"]
+
+
+        command = "curl -X POST https://api.twitter.com/1.1/direct_messages/events/new.json -H 'authorization: OAuth oauth_consumer_key=\"#{oauth_consumer_key2}\",oauth_token=\"#{oauth_token2}\",oauth_signature_method=\"HMAC-SHA1\",oauth_timestamp=\"#{oauth_timestamp2}\",oauth_nonce=\"#{oauth_nonce2}\",oauth_version=\"1.0\",oauth_signature=\"#{oauth_signature2}\"' -H 'Content-Type: application/json' -d '{\"event\":{\"type\":\"message_create\",\"message_create\":{\"target\":{\"recipient_id\":\"3093904686\"},\"message_data\":{\"text\":\"Hello World!\",\"attachment\":{\"type\":\"media\",\"media\":{\"id\":#{media_id}}}}}}}'"
+        response = %x[#{command}]
+
+        JSON.parse(response)
+
+      end
+
+      def create_direct_message_without_media(user, text, options = {})
+
+
+
+        @headers_second_request = Twitter::Headers.new(self, :post,"https://api.twitter.com/1.1/direct_messages/events/new.json").request_headers
+
+        auth_header2 = @headers_second_request[:authorization]
+        auth_header2 = '{' + auth_header2 + '}'
+        auth_header2 = auth_header2.gsub("OAuth","")
+        oauth_json_headers2 = JSON.parse(auth_header2.gsub(/([a-z_]+)=/, '"\1":'))
+
+        oauth_consumer_key2 = oauth_json_headers2["oauth_consumer_key"]
+        oauth_nonce2= oauth_json_headers2["oauth_nonce"]
+        oauth_signature2 = oauth_json_headers2["oauth_signature"]
+        oauth_signature_method2 = oauth_json_headers2["oauth_signature_method"]
+        oauth_timestamp2 = oauth_json_headers2["oauth_timestamp"]
+        oauth_token2 = oauth_json_headers2["oauth_token"]
+        oauth_version2 = oauth_json_headers2["oauth_version"]
+
+
+        command = "curl -X POST https://api.twitter.com/1.1/direct_messages/events/new.json -H 'authorization: OAuth oauth_consumer_key=\"#{oauth_consumer_key2}\",oauth_token=\"#{oauth_token2}\",oauth_signature_method=\"HMAC-SHA1\",oauth_timestamp=\"#{oauth_timestamp2}\",oauth_nonce=\"#{oauth_nonce2}\",oauth_version=\"1.0\",oauth_signature=\"#{oauth_signature2}\"' -H 'Content-Type: application/json' -d '{\"event\":{\"type\":\"message_create\",\"message_create\":{\"target\":{\"recipient_id\":\"3093904686\"},\"message_data\":{\"text\":\"#{text}\"}}}}'"
+        response = %x[#{command}]
+
+        JSON.parse(response)
+
+      end
+
+
+      def get_direct_message_with_id(dm_id,options={})
+
+        @headers_for_get_request = Twitter::Headers.new(self, :get, "https://api.twitter.com/1.1/direct_messages/events/show.json?id=#{dm_id}", options).request_headers
+
+        auth_header = @headers_for_get_request[:authorization]
+        auth_header = '{' + auth_header + '}'
+        auth_header = auth_header.gsub("OAuth","")
+        oauth_json_headers = JSON.parse(auth_header.gsub(/([a-z_]+)=/, '"\1":'))
+
+        oauth_consumer_key = oauth_json_headers["oauth_consumer_key"]
+        oauth_nonce = oauth_json_headers["oauth_nonce"]
+        oauth_signature = oauth_json_headers["oauth_signature"]
+        oauth_signature_method = oauth_json_headers["oauth_signature_method"]
+        oauth_timestamp = oauth_json_headers["oauth_timestamp"]
+        oauth_token = oauth_json_headers["oauth_token"]
+        oauth_version = oauth_json_headers["oauth_version"]
+
+        uri = "https://api.twitter.com/1.1/direct_messages/events/show.json?id=#{dm_id}"
+        command = "curl -X GET #{uri} -H 'authorization: OAuth oauth_consumer_key=\"#{oauth_consumer_key}\",oauth_token=\"#{oauth_token}\",oauth_signature_method=\"HMAC-SHA1\",oauth_timestamp=\"#{oauth_timestamp}\",oauth_nonce=\"#{oauth_nonce}\",oauth_version=\"1.0\",oauth_signature=\"#{oauth_signature}\"' "
+        response = %x[#{command}]
+
+        JSON.parse(response)
+      end
+
+      def get_recent_direct_messages(count,options={})
+
+        @headers_for_get_request = Twitter::Headers.new(self, :get, "https://api.twitter.com/1.1/direct_messages/events/list.json?count=#{count}", options).request_headers
+
+        auth_header = @headers_for_get_request[:authorization]
+        auth_header = '{' + auth_header + '}'
+        auth_header = auth_header.gsub("OAuth","")
+        oauth_json_headers = JSON.parse(auth_header.gsub(/([a-z_]+)=/, '"\1":'))
+
+        oauth_consumer_key = oauth_json_headers["oauth_consumer_key"]
+        oauth_nonce = oauth_json_headers["oauth_nonce"]
+        oauth_signature = oauth_json_headers["oauth_signature"]
+        oauth_signature_method = oauth_json_headers["oauth_signature_method"]
+        oauth_timestamp = oauth_json_headers["oauth_timestamp"]
+        oauth_token = oauth_json_headers["oauth_token"]
+        oauth_version = oauth_json_headers["oauth_version"]
+
+        uri = "https://api.twitter.com/1.1/direct_messages/events/list.json?count=#{count}"
+        command = "curl -X GET #{uri} -H 'authorization: OAuth oauth_consumer_key=\"#{oauth_consumer_key}\",oauth_token=\"#{oauth_token}\",oauth_signature_method=\"HMAC-SHA1\",oauth_timestamp=\"#{oauth_timestamp}\",oauth_nonce=\"#{oauth_nonce}\",oauth_version=\"1.0\",oauth_signature=\"#{oauth_signature}\"' "
+        response = %x[#{command}]
+
+        JSON.parse(response)
+      end
+
+
+
+
+      private
 
       def format_json_options(user_id, text, options)
         {'event': {'type': 'message_create', 'message_create': {'target': {'recipient_id': user_id}, 'message_data': {'text': text}.merge(options)}}}

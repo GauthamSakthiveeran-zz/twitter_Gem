@@ -13,6 +13,7 @@ module Twitter
     # @param options [Hash]
     # @return [Twitter::Client]
     def initialize(options = {})
+      puts "AM HERE"
       options.each do |key, value|
         instance_variable_set("@#{key}", value)
       end
@@ -44,7 +45,7 @@ module Twitter
       credentials.values.none? { |v| blank?(v) }
     end
 
-  private
+    private
 
     def blank?(string)
       string.respond_to?(:empty?) ? string.empty? : !string

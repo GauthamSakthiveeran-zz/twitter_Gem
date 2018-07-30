@@ -32,10 +32,12 @@ module Twitter
       headers
     end
 
-  private
+    private
 
     def auth_header
+
       if @client.user_token?
+        $oauth_auth_global = oauth_auth_header
         oauth_auth_header.to_s
       else
         @client.bearer_token = @client.token unless @client.bearer_token?

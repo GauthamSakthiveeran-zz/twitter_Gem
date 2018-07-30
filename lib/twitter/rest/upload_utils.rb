@@ -3,17 +3,24 @@ require 'twitter/rest/request'
 module Twitter
   module REST
     module UploadUtils
-    private
+
+      def upload_public(media, media_category_prefix: 'tweet')
+
+        upload(media, media_category_prefix: 'tweet')
+      end
+      #private
 
       # Uploads images and videos. Videos require multiple requests and uploads in chunks of 5 Megabytes.
       # The only supported video format is mp4.
       #
       # @see https://dev.twitter.com/rest/public/uploading-media
       def upload(media, media_category_prefix: 'tweet')
+        $attachment_file_path = media
+
         return chunk_upload(media, 'video/mp4', "#{media_category_prefix}_video") if File.extname(media) == '.mp4'
         return chunk_upload(media, 'image/gif', "#{media_category_prefix}_gif") if File.extname(media) == '.gif' && File.size(media) > 5_000_000
 
-        Twitter::REST::Request.new(self, :multipart_post, 'https://upload.twitter.com/1.1/media/upload.json', key: :media, file: media).perform
+        Twitter::REST::Request.new(self, :multipart_post, 'https://upload.twitter.com/1.1/media/upload.json', key: :media, file: File.open(media)).perform
       end
 
       # rubocop:disable MethodLength

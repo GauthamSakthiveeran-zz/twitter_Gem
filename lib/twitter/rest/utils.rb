@@ -12,7 +12,7 @@ module Twitter
       include Twitter::Utils
       DEFAULT_CURSOR = -1
 
-    private
+      private
 
       # Take a URI string or Twitter::Identity object and return its ID
       #
@@ -47,6 +47,7 @@ module Twitter
       # @param path [String]
       # @param options [Hash]
       def perform_request(request_method, path, options = {})
+        binding.pry
         Twitter::REST::Request.new(self, request_method, path, options).perform
       end
 
@@ -77,6 +78,7 @@ module Twitter
       # @param options [Hash]
       # @param klass [Class]
       def perform_get_with_objects(path, options, klass)
+        binding.pry
         perform_request_with_objects(:get, path, options, klass)
       end
 
@@ -92,6 +94,7 @@ module Twitter
       # @param options [Hash]
       # @param klass [Class]
       def perform_request_with_objects(request_method, path, options, klass)
+        binding.pry
         perform_request(request_method, path, options).collect do |element|
           klass.new(element)
         end
